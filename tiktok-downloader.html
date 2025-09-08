@@ -1,200 +1,67 @@
-/*
-TikTok Video Downloader - Single-file React component
-- Uses TailwindCSS for styling.
-- Frontend expects a backend API at /api/download that accepts JSON: { url, quality, watermark } and returns { fileUrl } or streams.
-- Includes: URL input, quality selector, watermark toggle, download MP4/MP3 buttons, recent history (localStorage), dark/light toggle, i18n stub.
-
-NOTE: This is a frontend-only component. For production you'll need a server-side service to:
-  - Fetch and process TikTok video (remove watermark / select quality / convert to mp3)
-  - Serve files (signed, time-limited URLs) or stream via response.
-  - Handle rate-limiting, caching, and compliance with platform policies and copyright laws.
-
-Server-side suggestions (not included here):
-  - Tech: Node.js + Express, or Fastify; use headless browser (Puppeteer) or third-party libraries carefully.
-  - Storage: S3-compatible object storage for temporary files; signed URLs for downloads.
-  - Convert audio with ffmpeg.
-  - Use a job queue (BullMQ/Redis) for heavy processing.
-  - Add CAPTCHA & rate limit per IP to avoid abuse.
-*/
-
 import React, { useState, useEffect } from 'react';
 
+
 export default function TikTokDownloader() {
-  const [url, setUrl] = useState('');
-  const [quality, setQuality] = useState('720');
-  const [watermark, setWatermark] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [message, setMessage] = useState('');
-  const [history, setHistory] = useState([]);
-  const [dark, setDark] = useState(false);
-  const [lang, setLang] = useState('en');
+const [url, setUrl] = useState('');
+const [quality, setQuality] = useState('720');
+const [watermark, setWatermark] = useState(true);
+const [processing, setProcessing] = useState(false);
+const [message, setMessage] = useState('');
+const [history, setHistory] = useState([]);
+const [dark, setDark] = useState(false);
+const [lang, setLang] = useState('en');
 
-  useEffect(() => {
-    // load history and theme
-    const h = JSON.parse(localStorage.getItem('tt_history') || '[]');
-    setHistory(h.slice(0, 20));
-    const savedDark = localStorage.getItem('tt_dark') === 'true';
-    setDark(savedDark);
-    document.documentElement.classList.toggle('dark', savedDark);
-  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('tt_history', JSON.stringify(history));
-  }, [history]);
+useEffect(() => {
+// load history and theme
+const h = JSON.parse(localStorage.getItem('tt_history') || '[]');
+setHistory(h.slice(0, 20));
+const savedDark = localStorage.getItem('tt_dark') === 'true';
+setDark(savedDark);
+document.documentElement.classList.toggle('dark', savedDark);
+}, []);
 
-  function addToHistory(item) {
-    const next = [item, ...history.filter(h => h.url !== item.url)].slice(0, 20);
-    setHistory(next);
-  }
 
-  function validateUrl(text) {
-    // basic check
-    return /tiktok.com|vm.tiktok.com/.test(text);
-  }
+useEffect(() => {
+localStorage.setItem('tt_history', JSON.stringify(history));
+}, [history]);
 
-  async function handleDownload(type) {
-    if (!validateUrl(url)) {
-      setMessage('Please paste a valid TikTok video URL.');
-      return;
-    }
-    setProcessing(true);
-    setMessage('Processing...');
 
-    try {
-      const resp = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, quality, watermark, type }),
-      });
+function addToHistory(item) {
+const next = [item, ...history.filter(h => h.url !== item.url)].slice(0, 20);
+setHistory(next);
+}
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.message || 'Server error');
-      }
 
-      const data = await resp.json();
-      // data: { fileUrl, filename }
-      if (data && data.fileUrl) {
-        // add to history
-        addToHistory({ url, type, quality, watermark, time: new Date().toISOString(), fileUrl: data.fileUrl });
+function validateUrl(text) {
+// basic check
+return /tiktok.com|vm.tiktok.com/.test(text);
+}
 
-        // trigger download
-        const a = document.createElement('a');
-        a.href = data.fileUrl;
-        a.download = data.filename || (type === 'mp3' ? 'audio.mp3' : 'video.mp4');
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setMessage('Download started — check your browser downloads.');
-      } else {
-        throw new Error('Unexpected server response.');
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage(err.message || 'Failed to process the video.');
-    } finally {
-      setProcessing(false);
-    }
-  }
 
-  function clearHistory() {
-    setHistory([]);
-    localStorage.removeItem('tt_history');
-  }
+async function handleDownload(type) {
+if (!validateUrl(url)) {
+setMessage('Please paste a valid TikTok video URL.');
+return;
+}
+setProcessing(true);
+setMessage('Processing...');
 
-  function toggleTheme() {
-    const next = !dark;
-    setDark(next);
-    localStorage.setItem('tt_dark', next);
-    document.documentElement.classList.toggle('dark', next);
-  }
 
-  return (
-    <div className={`min-h-screen flex items-center justify-center p-6 ${dark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      <div className="w-full max-w-3xl">
-        <header className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold">TikTok Downloader</h1>
-          <div className="flex gap-2 items-center">
-            <select value={lang} onChange={e => setLang(e.target.value)} className="border rounded p-1">
-              <option value="en">EN</option>
-              <option value="bn">বাংলা</option>
-            </select>
-            <button onClick={toggleTheme} className="px-3 py-1 border rounded">{dark ? 'Light' : 'Dark'}</button>
-          </div>
-        </header>
+try {
+const resp = await fetch('/api/download', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ url, quality, watermark, type }),
+});
 
-        <main className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-          <p className="mb-4 text-sm opacity-70">Paste a TikTok video URL below and choose your download options.</p>
 
-          <div className="grid grid-cols-1 gap-3">
-            <input
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              placeholder="https://www.tiktok.com/@user/video/123... or https://vm.tiktok.com/..."
-              className="w-full border rounded p-3 bg-transparent"
-            />
+if (!resp.ok) {
+const err = await resp.json().catch(() => ({}));
+throw new Error(err.message || 'Server error');
+}
 
-            <div className="flex gap-3 flex-wrap">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={watermark} onChange={e => setWatermark(e.target.checked)} />
-                Keep watermark
-              </label>
 
-              <label className="flex items-center gap-2">
-                Quality
-                <select value={quality} onChange={e => setQuality(e.target.value)} className="border rounded p-1 ml-2">
-                  <option value="480">480p</option>
-                  <option value="720">720p</option>
-                  <option value="1080">1080p</option>
-                </select>
-              </label>
-
-              <div className="ml-auto text-sm opacity-80">{processing ? 'Processing...' : ''}</div>
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={() => handleDownload('mp4')} disabled={processing} className="flex-1 px-4 py-3 rounded shadow bg-blue-600 text-white hover:opacity-90">
-                Download MP4
-              </button>
-              <button onClick={() => handleDownload('mp3')} disabled={processing} className="px-4 py-3 rounded border">
-                Download MP3
-              </button>
-            </div>
-
-            {message && <div className="text-sm mt-2 p-2 bg-yellow-50 dark:bg-yellow-900 rounded">{message}</div>}
-
-            <section className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium">Recent downloads</h3>
-                <button onClick={clearHistory} className="text-sm underline">Clear</button>
-              </div>
-
-              {history.length === 0 ? (
-                <div className="text-sm opacity-60">No recent downloads</div>
-              ) : (
-                <ul className="space-y-2 max-h-40 overflow-auto">
-                  {history.map((h, i) => (
-                    <li key={i} className="flex items-center justify-between p-2 rounded border bg-gray-50 dark:bg-gray-700">
-                      <div className="truncate max-w-xs">
-                        <div className="text-sm">{h.type.toUpperCase()} • {h.quality} • {h.watermark ? 'wm' : 'no-wm'}</div>
-                        <a href={h.url} target="_blank" rel="noreferrer" className="text-xs opacity-70 block truncate">{h.url}</a>
-                      </div>
-                      <div className="flex gap-2 items-center">
-                        <a href={h.fileUrl} className="text-sm underline" target="_blank" rel="noreferrer">Download</a>
-                        <div className="text-xs opacity-60">{new Date(h.time).toLocaleString()}</div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <footer className="mt-4 text-xs opacity-70">
-              <div>Note: This tool requires a backend service to fetch and process TikTok videos. Use responsibly and respect copyright.</div>
-            </footer>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+const data = await resp.json();
+// data: { fileUrl, filename }
 }
